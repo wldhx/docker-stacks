@@ -1,78 +1,150 @@
-# docker-stacks
+![docker pulls](https://img.shields.io/docker/pulls/jupyter/pyspark-notebook.svg) ![docker stars](https://img.shields.io/docker/stars/jupyter/pyspark-notebook.svg)
 
-[![Build Status](https://travis-ci.org/jupyter/docker-stacks.svg?branch=master)](https://travis-ci.org/jupyter/docker-stacks)
-[![Join the chat at https://gitter.im/jupyter/jupyter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/jupyter/jupyter?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Jupyter Notebook Python, Spark, Mesos Stack
 
-Opinionated stacks of ready-to-run Jupyter applications in Docker.
+## What it Gives You
 
-## Quick Start
+* Jupyter Notebook 4.1.x
+* Conda Python 3.x and Python 2.7.x environments
+* pyspark, pandas, matplotlib, scipy, seaborn, scikit-learn pre-installed
+* Spark 1.6.0 for use in local mode or to connect to a cluster of Spark workers
+* Mesos client 0.22 binary that can communicate with a Mesos master
+* Unprivileged user `jovyan` (uid=1000, configurable, see options) in group `users` (gid=100) with ownership over `/home/jovyan` and `/opt/conda`
+* [tini](https://github.com/krallin/tini) as the container entrypoint and [start-notebook.sh](../minimal-notebook/start-notebook.sh) as the default command
+* A [start-singleuser.sh](../minimal-notebook/start-singleuser.sh) script for use as an alternate command that runs a single-user instance of the Notebook server, as required by [JupyterHub](#JupyterHub)
+* Options for HTTPS, password auth, and passwordless `sudo`
 
-If you're familiar with Docker, have it configured, and know exactly what you'd like to run, this one-liner should work in most cases:
+## Basic Use
 
-```
-docker run -d -P jupyter/<your desired stack>
-```
-
-## Getting Started
-
-If this is your first time using Docker or any of the Jupyter projects, do the following to get started.
-
-1. [Install Docker](https://docs.docker.com/installation/) on your host of choice.
-2. Open the README in one of the folders in this git repository.
-3. Follow the README for that stack.
-
-## A visual overview of stacks
-
-Here's a diagram of the `FROM` relationships between all of the images defined in this project:
-
-[![Image inheritance diagram](internal/inherit-diagram.png)](http://interactive.blockdiag.com/?compression=deflate&src=eJyFzDELwjAQhuG9vyJ0trtYKnZzdxSRS3OVM9dcSOJQxf9u41BoEVzf77nTLJ01BDf1KpSSQOgSJBKnGuUlpACU6mkx2MOD07UXlyI9cZq3ubfqzKCRm9KgJnC7O8ZIeDgd2_JSF19R7dVAjgbgyklCLWI3c7EYHHJ-tTb5Lnbkx7lktSzZGEgwVXQdLuSvf-Gv8GP0EOzCrVt2wFyt5fsDQc9zBA)
-
-## Stacks, Tags, Versioning, and Progress
-
-Starting with [git commit SHA 9bd33dcc8688](https://github.com/jupyter/docker-stacks/tree/9bd33dcc8688):
-
-* Every folder here on GitHub has an equivalent `jupyter/<stack name>` on Docker Hub.
-* The `latest` tag in each Docker Hub repository tracks the `master` branch `HEAD` reference on GitHub.
-* Any 12-character image tag on Docker Hub refers to a git commit SHA here on GitHub. See the [Docker build history wiki page](https://github.com/jupyter/docker-stacks/wiki/Docker-build-history) for a table of build details.
-* Stack contents (e.g., new library versions) will be updated upon request via PRs against this project.
-* Users looking to remain on older builds should refer to specific git SHA tagged images in their work, not `latest`.
-* For legacy reasons, there are two additional tags named `3.2` and `4.0` on Docker Hub which point to images prior to our versioning scheme switch.
-
-## Other Tips
-
-* `tini -- start-notebook.sh` is the default Docker entrypoint-plus-command in every notebook stack. If you plan to modify it in any way, be sure to check the *Notebook Options* section of your stack's README to understand the consequences.
-* Every notebook stack is compatible with [JupyterHub](https://jupyterhub.readthedocs.org) 0.5.  When running with JupyterHub, you must override the Docker run command to point to the [start-singleuser.sh](minimal-notebook/start-singleuser.sh) script, which starts a single-user instance of the Notebook server.  See each stack's README for instructions on running with JupyterHub.
-* Check the [Docker recipes wiki page](https://github.com/jupyter/docker-stacks/wiki/Docker-Recipes) attached to this project for information about extending and deploying the Docker images defined here. Add to the wiki if you have relevant information.
-
-## Maintainer Workflow
-
-**For PRs that impact the definition of one or more stacks:**
-
-1. Pull a PR branch locally.
-2. Try building the affected stack(s).
-3. If everything builds OK locally, merge it.
-4. `ssh -i ~/.ssh/your-github-key build@docker-stacks.cloudet.xyz`
-5. Run these commands on that VM.
+The following command starts a container with the Notebook server listening for HTTP connections on port 8888 without authentication configured.
 
 ```
-cd docker-stacks
-# make sure we're always on clean master from github
-git fetch origin
-git reset --hard origin/master
-# if this fails, just run it again and again (idempotent)
-make release-all
+docker run -d -p 8888:8888 jupyter/pyspark-notebook
 ```
 
-When `make release-all` successfully pushes the last of its images to Docker Hub (currently `jupyter/all-spark-notebook`), Docker Hub invokes [the webhook](https://github.com/jupyter/docker-stacks/blob/master/internal/docker-stacks-webhook/) which updates the [Docker build history](https://github.com/jupyter/docker-stacks/wiki/Docker-build-history) wiki page.
+## Using Spark Local Mode
 
-**When there's a security fix in the Debian base image, do the following in place of the last command:**
+This configuration is nice for using Spark on small, local data.
 
-Update the `debian:jessie` SHA in the most-base images (e.g., minimal-notebook, minimal-kernel). Submit it as a regular PR and go through the build process.
+0. Run the container as shown above.
+2. Open a Python 2 or 3 notebook.
+3. Create a `SparkContext` configured for local mode.
 
-This will take time as the entire set of stacks will rebuild.
+For example, the first few cells in the notebook might read:
 
-**When there's a new stack, do the following before trying to `make release-all`:**
+```python
+import pyspark
+sc = pyspark.SparkContext('local[*]')
 
-1. Create a new repo in the `jupyter` org on Docker Hub named after the stack folder in the git repo.
-2. Grant the `stacks` team permission to write to the repo.
-3. Copy/paste the short and long descriptions from one of the other docker-stacks repos on Docker Hub. Modify the appropriate values.
+# do something to prove it works
+rdd = sc.parallelize(range(1000))
+rdd.takeSample(False, 5)
+```
+
+## Connecting to a Spark Cluster on Mesos
+
+This configuration allows your compute cluster to scale with your data.
+
+0. [Deploy Spark on Mesos](http://spark.apache.org/docs/latest/running-on-mesos.html).
+1. Configure each slave with [the `--no-switch_user` flag](https://open.mesosphere.com/reference/mesos-slave/) or create the `jovyan` user on every slave node.
+2. Ensure Python 2.x and/or 3.x and any Python libraries you wish to use in your Spark lambda functions are installed on your Spark workers.
+3. Run the Docker container with `--net=host` in a location that is network addressable by all of your Spark workers. (This is a [Spark networking requirement](http://spark.apache.org/docs/latest/cluster-overview.html#components).)
+    * NOTE: When using `--net=host`, you must also use the flags `--pid=host -e TINI_SUBREAPER=true`. See https://github.com/jupyter/docker-stacks/issues/64 for details.
+4. Open a Python 2 or 3 notebook.
+5. Create a `SparkConf` instance in a new notebook pointing to your Mesos master node (or Zookeeper instance) and Spark binary package location.
+6. Create a `SparkContext` using this configuration.
+
+For example, the first few cells in a Python 3 notebook might read:
+
+```python
+import os
+# make sure pyspark tells workers to use python3 not 2 if both are installed
+os.environ['PYSPARK_PYTHON'] = '/usr/bin/python3'
+
+import pyspark
+conf = pyspark.SparkConf()
+
+# point to mesos master or zookeeper entry (e.g., zk://10.10.10.10:2181/mesos)
+conf.setMaster("mesos://10.10.10.10:5050")
+# point to spark binary package in HDFS or on local filesystem on all slave
+# nodes (e.g., file:///opt/spark/spark-1.6.0-bin-hadoop2.6.tgz)
+conf.set("spark.executor.uri", "hdfs://10.122.193.209/spark/spark-1.6.0-bin-hadoop2.6.tgz")
+# set other options as desired
+conf.set("spark.executor.memory", "8g")
+conf.set("spark.core.connection.ack.wait.timeout", "1200")
+
+# create the context
+sc = pyspark.SparkContext(conf=conf)
+
+# do something to prove it works
+rdd = sc.parallelize(range(100000000))
+rdd.sumApprox(3)
+```
+
+To use Python 2 in the notebook and on the workers, change the `PYSPARK_PYTHON` environment variable to point to the location of the Python 2.x interpreter binary. If you leave this environment variable unset, it defaults to `python`.
+
+Of course, all of this can be hidden in an [IPython kernel startup script](http://ipython.org/ipython-doc/stable/development/config.html?highlight=startup#startup-files), but "explicit is better than implicit." :)
+
+## Connecting to a Spark Cluster on Standalone Mode
+
+Connection to Spark Cluster on Standalone Mode requires the following set of steps:
+
+0. Verify that the docker image (check the Dockerfile) and the Spark Cluster which is being deployed, run the same version of Spark.
+1. [Deploy Spark on Standalone Mode](http://spark.apache.org/docs/latest/spark-standalone.html).
+2. Run the Docker container with `--net=host` in a location that is network addressable by all of your Spark workers. (This is a [Spark networking requirement](http://spark.apache.org/docs/latest/cluster-overview.html#components).)
+    * NOTE: When using `--net=host`, you must also use the flags `--pid=host -e TINI_SUBREAPER=true`. See https://github.com/jupyter/docker-stacks/issues/64 for details.
+3. The language specific instructions are almost same as mentioned above for Mesos, only the master url would now be something like spark://10.10.10.10:7077
+
+## Notebook Options
+
+You can pass [Jupyter command line options](http://jupyter.readthedocs.org/en/latest/config.html#command-line-arguments) through the [`start-notebook.sh` command](https://github.com/jupyter/docker-stacks/blob/master/minimal-notebook/start-notebook.sh#L15) when launching the container. For example, to set the base URL of the notebook server you might do the following:
+
+```
+docker run -d -p 8888:8888 jupyter/pyspark-notebook start-notebook.sh --NotebookApp.base_url=/some/path
+```
+
+You can sidestep the `start-notebook.sh` script entirely by specifying a command other than `start-notebook.sh`. If you do, the `NB_UID` and `GRANT_SUDO` features documented below will not work. See the Docker Options section for details.
+
+## Docker Options
+
+You may customize the execution of the Docker container and the Notebook server it contains with the following optional arguments.
+
+* `-e PASSWORD="YOURPASS"` - Configures Jupyter Notebook to require the given password. Should be conbined with `USE_HTTPS` on untrusted networks.
+* `-e USE_HTTPS=yes` - Configures Jupyter Notebook to accept encrypted HTTPS connections. If a `pem` file containing a SSL certificate and key is not found in `/home/jovyan/.ipython/profile_default/security/notebook.pem`, the container will generate a self-signed certificate for you.
+* `-e NB_UID=1000` - Specify the uid of the `jovyan` user. Useful to mount host volumes with specific file ownership. For this option to take effect, you must run the container with `--user root`. (The `start-notebook.sh` script will `su jovyan` after adjusting the user id.)
+* `-e GRANT_SUDO=yes` - Gives the `jovyan` user passwordless `sudo` capability. Useful for installing OS packages. For this option to take effect, you must run the container with `--user root`. (The `start-notebook.sh` script will `su jovyan` after adding `jovyan` to sudoers.) **You should only enable `sudo` if you trust the user or if the container is running on an isolated host.**
+* `-v /some/host/folder/for/work:/home/jovyan/work` - Host mounts the default working directory on the host to preserve work even when the container is destroyed and recreated (e.g., during an upgrade).
+* `-v /some/host/folder/for/server.pem:/home/jovyan/.local/share/jupyter/notebook.pem` - Mounts a SSL certificate plus key for `USE_HTTPS`. Useful if you have a real certificate for the domain under which you are running the Notebook server.
+* `-p 4040:4040` - Opens the port for the [Spark Monitoring and Instrumentation UI](http://spark.apache.org/docs/latest/monitoring.html). Note every new spark context that is created is put onto an incrementing port (ie. 4040, 4041, 4042, etc.), and it might be necessary to open multiple ports. `docker run -d -p 8888:8888 -p 4040:4040 -p 4041:4041 jupyter/pyspark-notebook`
+
+
+## Conda Environments
+
+The default Python 3.x [Conda environment](http://conda.pydata.org/docs/using/envs.html) resides in `/opt/conda`. A second Python 2.x Conda environment exists in `/opt/conda/envs/python2`. You can [switch to the python2 environment](http://conda.pydata.org/docs/using/envs.html#change-environments-activate-deactivate) in a shell by entering the following:
+
+```
+source activate python2
+```
+
+You can return to the default environment with this command:
+
+```
+source deactivate
+```
+
+The commands `ipython`, `python`, `pip`, `easy_install`, and `conda` (among others) are available in both environments.
+
+
+## JupyterHub
+
+[JupyterHub](https://jupyterhub.readthedocs.org) requires a single-user instance of the Jupyter Notebook server per user.   To use this stack with JupyterHub and [DockerSpawner](https://github.com/jupyter/dockerspawner), you must specify the container image name and override the default container run command in your `jupyterhub_config.py`:
+
+```python
+# Spawn user containers from this image
+c.DockerSpawner.container_image = 'jupyter/pyspark-notebook'
+
+# Have the Spawner override the Docker run command
+c.DockerSpawner.extra_create_kwargs.update({
+	'command': '/usr/local/bin/start-singleuser.sh'
+})
+```
